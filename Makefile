@@ -1,4 +1,4 @@
-default: clean compile
+default: compile
 
 yapmat: compile
 

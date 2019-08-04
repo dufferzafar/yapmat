@@ -15,7 +15,6 @@
 ## issues
 
 * Daemonize the wrapper / yapmatd
-* 
 
 * Monitor launched process
     - Rerun if stopped
