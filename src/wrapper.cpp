@@ -92,8 +92,32 @@ static void daemonize()
     //     close(x);
     // }
 
+    // This is when we have the final ID?
+    /* Ensure only one copy */
+    string pidfile_path = PDIR + "/" + "wrapper.pid";
+    int pidfd = open(pidfile_path.c_str(), O_RDWR | O_CREAT, 0600);
+
+    if (pidfd == -1)
     {
+        /* Couldn't open lock file */
+        cerr << "Could not open PID lock file" << pidfile_path;
+        exit(1);
     }
+
+    /* Try to lock file */
+    if (lockf(pidfd, F_TLOCK, 0) == -1)
+    {
+        /* Couldn't get lock on lock file */
+        cerr << "Could not lock PID lock file" << pidfile_path;
+        exit(1);
+    }
+
+    /* Get and format PID */
+    char str[10];
+    sprintf(str, "%d\n", getpid());
+
+    /* write pid to lockfile */
+    write(pidfd, str, strlen(str));
 }
 
 static void setup(int argc, char* argv[])
@@ -120,12 +144,18 @@ static void setup(int argc, char* argv[])
     //     exit(1);
     // }
 
+    // string wstdout_path = PDIR + "/" + "wrapper.stdout";
+    // freopen(wstdout_path.c_str(), "w", stdout);
+
+    // Not sure where the errors should go, so for the time being
+    // We log it to a separate file
+    string wstderr_path = PDIR + "/" + "wrapper.stderr";
+    freopen(wstderr_path.c_str(), "w", stderr);
+
     // Write the entire command string to $PDIR/cmd
-    ofstream cmd(PDIR + "/" + "cmd", ofstream::out);
+    ofstream cmd(PDIR + "/" + "cmdline", ofstream::out);
     for (int i = 2; i < argc; i++)
-    {
         cmd << argv[i] << " ";
-    }
 }
 
 static void launch_process(int argc, char* argv[])
