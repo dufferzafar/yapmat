@@ -9,7 +9,7 @@ namespace fs = std::experimental::filesystem;
 
 using namespace std;
 
-string YDIR = "/tmp/yapmat/";
+string YDIR = "/tmp/yapmat";
 
 static void yapmat_manage(string name, char* argv[]) {
 
@@ -26,47 +26,97 @@ static void yapmat_manage(string name, char* argv[]) {
 
 }
 
-static void yapmat_list() {
+static void yapmat_list() 
+{
 
-    cerr << "yapmat_list: Not implemented yet";
+    cout << "Name" << "\t : \t" << "Command Line" << endl
+         << "-------------------------------" << endl;
 
-    // List all directories under YDIR
+    for (const auto &entry : fs::directory_iterator(YDIR)) 
+    {
+        string path = entry.path();
+        string id = path.substr(path.find_last_of("/") + 1);
 
-    // Perhaps even print the contents of $YDIR/$proc/cmd
+        ifstream cmdline_file(path + "/" + "cmdline");
+        string cmdline; getline(cmdline_file, cmdline);
+
+        cout << id << "\t : \t" << cmdline << endl;
+    }
 
 }
 
 static void yapmat_logs(string id) {
 
-    cerr << "yapmat_logs: Not implemented yet";
+    if (id == "all") 
+    {
+        for (const auto &entry : fs::directory_iterator(YDIR))
+        {
+            string path = entry.path();
+            string id = path.substr(path.find_last_of("/") + 1);
 
-    if (id == "all") {
 
-        // Iterate, read, and print $YDIR/$proc/stdout (err?)
+            cout << endl 
+                 << "--------------------------------------------------"
+                 << endl
+                 << "Logs of Process: '" << id << "'" 
+                 << endl
+                 << "--------------------------------------------------"
+                 << endl << endl;
 
-    } else {
+            ifstream stdout_file(path + "/" + "stdout");
+            string line;
 
-        // Read & print $YDIR/<id>/stdout (err?)
+            while(getline(stdout_file, line)) 
+                cout << line << endl;
 
+        }
+    } 
+    else {
+
+        cout << endl 
+             << "--------------------------------------------------"
+             << endl
+             << "Logs of Process: '" << id << "'" 
+             << endl
+             << "--------------------------------------------------"
+             << endl << endl;
+
+        ifstream stdout_file(YDIR + "/" + id + "/" + "stdout");
+        string line;
+
+        while (getline(stdout_file, line))
+            cout << line << endl;
     }
 
 }
 
-static void yapmat_status(string id) {
+static void yapmat_status(string id) 
+{
+    cout << "Name" << "\t : \t" << "Status"   << endl
+         << "-------------------------------" << endl;
 
-    cerr << "yapmat_status: Not implemented yet";
+    if (id == "all") 
+    {
 
-    if (id == "all") {
+        for (const auto &entry : fs::directory_iterator(YDIR))
+        {
+            string path = entry.path();
+            string id = path.substr(path.find_last_of("/") + 1);
 
-        // Iterate over $YDIR/$proc
-        // and print the status - running, stopped
+            ifstream status_file(path + "/" + "status");
+            string status; status_file >> status;
 
-    } else {
+            cout << id << "\t : \t" << status << endl;
+        }
+    
+    } 
+    else 
+    {
+        ifstream status_file(YDIR + "/" + id + "/" + "status");
+        string status; status_file >> status;
 
-        // Just print status of $YDIR/<id>
-
+        cout << id << "\t : \t" << status << endl;
     }
-
 }
 
 static void yapmat_start(string id) {
@@ -80,15 +130,27 @@ static void yapmat_start(string id) {
 }
 
 
-static void yapmat_stop(string id) {
-
-    // Do not delete the directory of the process
+static void yapmat_stop(string id, bool stop_exit = true) 
+{
     string pdir = YDIR + "/" + id;
 
-    if (!fs::is_directory(pdir))
-    {
+    if (!fs::is_directory(pdir)) {
         cerr << "Process '" << id << "' is not being managed by yapmat." << endl;
         exit(1);
+    }
+
+    // Read the status of the process and do nothing if it is already stopped
+    ifstream status_file_in(pdir + "/" + "status");
+    string status; status_file_in >> status;
+
+    if (status == "stopped") 
+    {
+        cerr << "Process '" << id << "' is already stopped." << endl;
+
+        if (stop_exit)
+            exit(1);
+        else
+            return;
     }
 
     ifstream wpidfile(pdir + "/" + "wrapper.pid");
@@ -103,11 +165,10 @@ static void yapmat_stop(string id) {
     else
         cout << "Process stopped successfully." << endl;
 
-    ofstream status(pdir + "/" + "status", ofstream::out);
-    status << "stopped";
+    ofstream status_file_out(pdir + "/" + "status", ofstream::out);
+    status_file_out << "stopped";
 
 }
-
 
 static void yapmat_restart(string id) {
 
@@ -121,15 +182,16 @@ static void yapmat_restart(string id) {
 
 }
 
-static void yapmat_unmanage(string id) {
-
-    cerr << "yapmat_unmanage: Not implemented yet";
-
+static void yapmat_unmanage(string id) 
+{
     // Stop the running process
-    yapmat_stop(id);
+    yapmat_stop(id, false);
 
-    // Delete the directory $YDIR/$id
+    // Delete process' directory
+    string pdir = YDIR + "/" + id;
+    cout << "Removing directory: " << pdir;
 
+    fs::remove_all(pdir);
 }
 
 static void yapmat_kill(string id, int signum) {
@@ -179,15 +241,14 @@ int main(int argc, char* argv[])
 
     } else if (command == "logs") {
 
-        if (argc < 3) print_usage();
+        string id = (argc > 2) ? argv[2] : "all";
 
-        yapmat_logs(argv[2]);
+        yapmat_logs(id);
 
     } else if (command == "status") {
 
-        if (argc < 3) print_usage();
-
-        yapmat_status(argv[2]);
+        string id = (argc > 2) ? argv[2] : "all";
+        yapmat_status(id);
 
     } else if (command == "start") {
 
@@ -222,7 +283,8 @@ int main(int argc, char* argv[])
         yapmat_kill(argv[3], stoi(argv[2]));
 
     } else {
-        cout << "default case" << endl;
+        cout << "Unknown command: " << command << endl << endl;
+
         print_usage();
     }
 
