@@ -83,10 +83,29 @@ static void yapmat_start(string id) {
 static void yapmat_stop(string id) {
 
     // Do not delete the directory of the process
+    string pdir = YDIR + "/" + id;
 
-    // Send SIGKILL to $YDIR/$id/wpid
+    if (!fs::is_directory(pdir))
+    {
+        cerr << "Process '" << id << "' is not being managed by yapmat." << endl;
+        exit(1);
+    }
 
-    // echo "stopped" > $YDIR/$id/status
+    ifstream wpidfile(pdir + "/" + "wrapper.pid");
+    int wpid; wpidfile >> wpid;
+
+    cout << "Sending SIGKILL to wrapper process '"
+         << id << "' with pid " << wpid << endl;
+
+    // Send SIGKILL to wrapper process
+    if (kill(wpid, SIGKILL))
+        cerr << "Failed to stop process." << endl;
+    else
+        cout << "Process stopped successfully." << endl;
+
+    ofstream status(pdir + "/" + "status", ofstream::out);
+    status << "stopped";
+
 }
 
 
