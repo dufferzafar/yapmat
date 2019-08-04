@@ -11,7 +11,7 @@
 #include <fcntl.h>
 
 #include <bits/stdc++.h>
-#include <experimental/filesystem> 
+#include <experimental/filesystem>
 #include <memory>
 
 using namespace std;
@@ -19,7 +19,7 @@ using namespace std;
 // NOTE: What if this doesn't exist on skae machines?
 namespace fs = std::experimental::filesystem;
 
-/* 
+/*
 Launches a process and ensures that it is always running.
 
 Usage: wrapper <name> <executable> [<args>...]
@@ -30,7 +30,7 @@ Usage: wrapper <name> <executable> [<args>...]
 string YDIR = "/tmp/yapmat/";
 string PNAME, PDIR;
 
-static void daemonize() 
+static void daemonize()
 {
     // ======================================================================= //
     //          https://github.com/pasce/daemon-skeleton-linux-c
@@ -44,22 +44,27 @@ static void daemonize()
     /* An error occurred - why could this happen? */
     if (pid < 0)
     {
-        cerr << "First fork call failed";
-        exit(EXIT_FAILURE);
+        exit(1);
     }
 
     /* Success: Let the parent terminate */
     if (pid > 0)
-        exit(EXIT_SUCCESS);
+        exit(0);
 
     /* On success: The child process becomes session leader */
     if (setsid() < 0)
-        exit(EXIT_FAILURE);
+        exit(1);
 
     /* Catch, ignore and handle signals */
     /* TODO: Implement a working signal handler */
-    signal(SIGCHLD, SIG_IGN);
-    signal(SIGHUP, SIG_IGN);
+    // signal(SIGCHLD, SIG_IGN);
+    // signal(SIGHUP, SIG_IGN);
+    // signal(SIGALRM, SIG_IGN);
+
+    // Block all signals?
+    sigset_t mask;
+    sigfillset(&mask);
+    sigprocmask(SIG_SETMASK, &mask, NULL);
 
     /* Fork off for the second time so there we have no tty */
     // For why: https://stackoverflow.com/questions/881388/
@@ -67,27 +72,31 @@ static void daemonize()
 
     /* An error occurred */
     if (pid < 0)
-        exit(EXIT_FAILURE);
+        exit(1);
 
     /* Success: Let the parent terminate */
     if (pid > 0)
-        exit(EXIT_SUCCESS);
+        exit(0);
 
     /* Set new file permissions on all files created */
-    umask(0);
+    // umask(0);
 
     /* Change the working directory to the root directory */
     /* or another appropriated directory */
     // chdir("/");
 
     /* Close all open file descriptors */
-    for (int x = sysconf(_SC_OPEN_MAX); x >= 0; x--)
+    // close(0); close(1); close(2);
+    // for (int x = sysconf(_SC_OPEN_MAX); x >= 0; x--)
+    // {
+    //     close(x);
+    // }
+
     {
-        close(x);
     }
 }
 
-static void setup(int argc, const char* argv[]) 
+static void setup(int argc, char* argv[])
 {
     // Create main yapmat directory
     if (!fs::is_directory(YDIR) || !fs::exists(YDIR))
@@ -99,6 +108,7 @@ static void setup(int argc, const char* argv[])
     PNAME = argv[1];
     PDIR = YDIR + "/" + PNAME;
 
+    // TODO: Move the directory creation logic to yapmat?
     // Create a directory for this process under $DIR
     if (!fs::is_directory(PDIR) || !fs::exists(PDIR))
     {
@@ -107,7 +117,7 @@ static void setup(int argc, const char* argv[])
     // else
     // {
     //     cerr << "A process with same name is already being managed.";
-    //     exit(EXIT_FAILURE);
+    //     exit(1);
     // }
 
     // Write the entire command string to $PDIR/cmd
@@ -118,20 +128,16 @@ static void setup(int argc, const char* argv[])
     }
 }
 
-static void launch_process(int argc, const char* argv[]) 
+static void launch_process(int argc, char* argv[])
 {
     pid_t pid = fork();
 
-    if (pid < 0) {
-        cerr << "fork call failed";
-        exit(EXIT_FAILURE);
-    }
+    if (pid < 0)
+        exit(1);
 
     // Child
     if (pid == 0)
     {
-        cout << "Child running: " << endl;
-
         // Open files in $DIR/$pname/ to write to
         string stdout_path = PDIR + "/" + "stdout";
         int stdout = open(stdout_path.c_str(), O_WRONLY | O_APPEND | O_CREAT, 0666);
@@ -140,8 +146,8 @@ static void launch_process(int argc, const char* argv[])
         int stderr = open(stderr_path.c_str(), O_WRONLY | O_APPEND | O_CREAT, 0666);
 
         // Redirect output of child process to files
-        dup2(stdout, 1); 
-        dup2(stderr, 2); 
+        dup2(stdout, 1);
+        dup2(stderr, 2);
 
         // These FDs are no longer needed as the dup'ed handles are sufficient
         close(stdout);
@@ -170,15 +176,15 @@ static void launch_process(int argc, const char* argv[])
         {
             int code = WEXITSTATUS(status);
 
-            if (code == 255) 
+            if (code == 255)
             {
                 cerr << "Failed to execute process" << endl;
                 exit(1);
-            } 
-            else 
+            }
+            else
             {
                 // Perhaps log some info into a file?
-                cout << "Child stopped: " << pid << " code: " << code << endl;
+                // cout << "Child stopped: " << pid << " code: " << code << endl;
 
                 // Launch process again
                 launch_process(argc, argv);
@@ -193,19 +199,19 @@ static void launch_process(int argc, const char* argv[])
 
         else
         {
-            cerr << "Dunno what happened";
+            // cerr << "Dunno what happened";
             exit(1);
         }
     }
 }
 
-int main(int argc, char const *argv[])
+int main(int argc, char* argv[])
 {
 
     // Argument sanitation
     if (argc < 3) {
         cerr << "Usage: wrapper <name> <executable> [<args>...]";
-        exit(EXIT_FAILURE);
+        exit(1);
     }
 
     setup(argc, argv);
@@ -215,11 +221,11 @@ int main(int argc, char const *argv[])
     // ======================================================================= //
 
     daemonize();
-    
+
     // ======================================================================= //
     // Now that we have a daemon, fork() once again and execvp the process
     // ======================================================================= //
-    
+
     launch_process(argc, argv);
 
     return 0;
