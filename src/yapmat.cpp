@@ -119,13 +119,33 @@ static void yapmat_status(string id)
     }
 }
 
-static void yapmat_start(string id) {
+static void yapmat_start(string id) 
+{
 
-    cerr << "yapmat_start: Not implemented yet";
+    string pdir = YDIR + "/" + id;
+
+    if (!fs::is_directory(pdir))
+    {
+        cerr << "Process '" << id << "' is not being managed by yapmat." << endl;
+        exit(1);
+    }
+
+    // Read the status of the process and do nothing if it is already stopped
+    ifstream status_file_in(pdir + "/" + "status");
+    string status; status_file_in >> status;
+
+    if (status == "running")
+    {
+        cerr << "Process '" << id << "' is already running." << endl;
+        exit(1);
+    }
 
     // How does manage differ from start?
 
     // echo "running" > $YDIR/$id/status
+
+    ofstream status_file_out(pdir + "/" + "status", ofstream::out);
+    status_file_out << "running";
 
 }
 
